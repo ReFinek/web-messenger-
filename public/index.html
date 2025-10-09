@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Веб-Мессенджер</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #4a5568;
+            color: white;
+            padding: 15px 20px;
+            text-align: center;
+        }
+
+        .chat-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f7fafc;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .my-message {
+            background: #4299e1;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .other-message {
+            background: white;
+            border: 1px solid #e2e8f0;
+        }
+
+        .message-info {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 25px;
+            outline: none;
+            font-size: 16px;
+        }
+
+        input:focus {
+            border-color: #4299e1;
+        }
+
+        button {
+            padding: 12px 25px;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #3182ce;
+        }
+
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .login-box {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .online-users {
+            padding: 10px 20px;
+            background: #edf2f7;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.9em;
+            color: #4a5568;
+        }
+
+        .system-message {
+            text-align: center;
+            color: #718096;
+            font-style: italic;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box">
+            <h2>Вход в мессенджер</h2>
+            <input type="text" id="usernameInput" placeholder="Введите ваше имя" maxlength="20">
+            <button onclick="joinChat()">Войти в чат</button>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="header">
+            <h1>💬 Веб-Мессенджер</h1>
+        </div>
+        <div class="online-users" id="onlineUsers">
+            Онлайн: 1
+        </div>
+        <div class="chat-area" id="chatArea"></div>
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Введите сообщение..." disabled>
+            <button onclick="sendMessage()" disabled id="sendBtn">Отправить</button>
+        </div>
+    </div>
+
+    <!-- Сначала подключаем Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <script>
+        // Инициализация переменных
+        let socket = null;
+        let currentUser = '';
+
+        // Ждем загрузки DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            // Инициализируем socket после загрузки страницы
+            socket = io();
+            
+            // Настройка обработчиков событий
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Обработка нажатия Enter в поле логина
+            document.getElementById('usernameInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    joinChat();
+                }
+            });
+
+            // Обработка нажатия Enter в поле сообщения
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+
+            // Обработчики событий Socket.io
+            socket.on('messageHistory', (messages) => {
+                const chatArea = document.getElementById('chatArea');
+                messages.forEach(msg => addMessageToChat(msg));
+                chatArea.scrollTop = chatArea.scrollHeight;
+            });
+
+            socket.on('newMessage', (message) => {
+                addMessageToChat(message);
+                const chatArea = document.getElementById('chatArea');
+                chatArea.scrollTop = chatArea.scrollHeight;
+            });
+
+            socket.on('userJoined', (username) => {
+                addSystemMessage(`${username} присоединился к чату`);
+            });
+
+            socket.on('userLeft', (username) => {
+                addSystemMessage(`${username} покинул чат`);
+            });
+
+            socket.on('onlineUsers', (users) => {
+                document.getElementById('onlineUsers').textContent = `Онлайн: ${users.length} - ${users.join(', ')}`;
+            });
+        }
+
+        function joinChat() {
+            const username = document.getElementById('usernameInput').value.trim();
+            if (username) {
+                currentUser = username;
+                socket.emit('userJoin', username);
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('messageInput').focus();
+            } else {
+                alert('Пожалуйста, введите имя');
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            
+            if (text) {
+                socket.emit('sendMessage', {
+                    username: currentUser,
+                    text: text
+                });
+                input.value = '';
+            }
+        }
+
+        function addMessageToChat(message) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${message.username === currentUser ? 'my-message' : 'other-message'}`;
+            
+            messageDiv.innerHTML = `
+                <div class="message-info">${message.username} • ${message.time}</div>
+                <div>${message.text}</div>
+            `;
+            
+            chatArea.appendChild(messageDiv);
+        }
+
+        function addSystemMessage(text) {
+            const chatArea = document.getElementById('chatArea');
+            const systemDiv = document.createElement('div');
+            systemDiv.className = 'system-message';
+            systemDiv.textContent = text;
+            chatArea.appendChild(systemDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+    </script>
+</body>
+</html>
