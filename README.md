@@ -1,9 +1,5 @@
 QuickChat Messenger
 
-https://img.shields.io/badge/QuickChat-Messenger-blue
-https://img.shields.io/badge/version-1.0.0-green
-https://img.shields.io/badge/license-MIT-yellow
-
 Современный веб-мессенджер с реальным временным общением, похожий на Telegram. Полностью готов к развертыванию и использованию.
 
 🚀 Возможности
@@ -228,3 +224,4 @@ npm start
 ---
 
 Примечание: Для продакшн использования обязательно измените JWT_SECRET в настройках Render.com на случайную строку.
+
